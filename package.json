@@ -1,0 +1,15 @@
+{
+  "name": "barakat-helpdesk",
+  "version": "1.0.0",
+  "description": "Internal help desk and ticketing system for IT and design requests.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "UNLICENSED"
+}
