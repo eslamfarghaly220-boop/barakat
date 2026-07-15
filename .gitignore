@@ -4,6 +4,8 @@ data/*.sqlite-*
 storage/
 uploads/*
 !.gitkeep
+outputs/
+work/
 .env
 .DS_Store
 Thumbs.db

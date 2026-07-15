@@ -18,6 +18,14 @@ const DATA_DIR = runtimePath(process.env.DATA_DIR, path.join(STORAGE_DIR, "data"
 const UPLOAD_DIR = runtimePath(process.env.UPLOAD_DIR, path.join(STORAGE_DIR, "uploads"));
 const DB_PATH = path.join(DATA_DIR, "helpdesk.sqlite");
 const MAX_BODY_SIZE = 25 * 1024 * 1024;
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true" || (IS_PRODUCTION && process.env.COOKIE_SECURE !== "false");
+
+const defaultHeaders = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "same-origin"
+};
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -75,6 +83,57 @@ function verifyPassword(password, stored) {
   if (!salt || !expected) return false;
   const actual = hashPassword(password, salt).split(":")[1];
   return crypto.timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
+}
+
+function getUsersCount() {
+  return db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
+}
+
+function createAdminUser({ name, email, password, department }) {
+  const id = crypto.randomUUID();
+  const createdAt = nowIso();
+  const admin = {
+    id,
+    name: String(name || "مدير البرنامج").trim() || "مدير البرنامج",
+    email: String(email || "").trim().toLowerCase(),
+    role: "admin",
+    department: String(department || "إدارة البرنامج").trim() || "إدارة البرنامج",
+    active: 1,
+    created_at: createdAt
+  };
+
+  db.prepare(`
+    INSERT INTO users (id, name, email, role, department, password_hash, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    admin.id,
+    admin.name,
+    admin.email,
+    admin.role,
+    admin.department,
+    hashPassword(password),
+    admin.created_at
+  );
+
+  return admin;
+}
+
+function seedInitialAdminFromEnv() {
+  if (getUsersCount() !== 0) return;
+  if (!process.env.INITIAL_ADMIN_EMAIL || !process.env.INITIAL_ADMIN_PASSWORD) return;
+
+  const admin = createAdminUser({
+    name: process.env.INITIAL_ADMIN_NAME,
+    email: process.env.INITIAL_ADMIN_EMAIL,
+    password: process.env.INITIAL_ADMIN_PASSWORD,
+    department: process.env.INITIAL_ADMIN_DEPARTMENT
+  });
+
+  console.warn(`[setup] Initial admin created for ${admin.email} from environment variables.`);
+}
+
+function setupRequired() {
+  return getUsersCount() === 0;
 }
 
 function initDb() {
@@ -164,36 +223,7 @@ function initDb() {
   db.prepare("CREATE INDEX IF NOT EXISTS tickets_assignee_idx ON tickets(assignee_id)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS attachments_ticket_idx ON attachments(ticket_id)").run();
 
-  const usersCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
-  if (usersCount === 0) {
-    const createdAt = nowIso();
-    const generatedPassword = crypto.randomBytes(18).toString("base64url");
-    const initialAdmin = {
-      id: "u-admin",
-      name: String(process.env.INITIAL_ADMIN_NAME || "مدير البرنامج").trim() || "مدير البرنامج",
-      email: String(process.env.INITIAL_ADMIN_EMAIL || "admin@barakat.local").trim().toLowerCase(),
-      department: String(process.env.INITIAL_ADMIN_DEPARTMENT || "إدارة البرنامج").trim() || "إدارة البرنامج",
-      password: String(process.env.INITIAL_ADMIN_PASSWORD || "").trim() || generatedPassword
-    };
-
-    db.prepare(`
-      INSERT INTO users (id, name, email, role, department, password_hash, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      initialAdmin.id,
-      initialAdmin.name,
-      initialAdmin.email,
-      "admin",
-      initialAdmin.department,
-      hashPassword(initialAdmin.password),
-      createdAt
-    );
-
-    if (!process.env.INITIAL_ADMIN_PASSWORD) {
-      console.warn(`[setup] Initial admin created for ${initialAdmin.email}. Generated password: ${initialAdmin.password}`);
-      console.warn("[setup] Set INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD before the first production run to choose your own credentials.");
-    }
-  }
+  seedInitialAdminFromEnv();
 }
 
 initDb();
@@ -232,6 +262,17 @@ function getSessionUser(req) {
   return user;
 }
 
+function createSession(userId) {
+  const sessionId = crypto.randomUUID();
+  sessions.set(sessionId, { userId, expiresAt: Date.now() + 8 * 60 * 60 * 1000 });
+  return sessionId;
+}
+
+function sessionCookie(sessionId, maxAge) {
+  const secure = COOKIE_SECURE ? "; Secure" : "";
+  return `barakat_session=${encodeURIComponent(sessionId)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
 function isStaff(user) {
   return ["admin", "manager", "agent"].includes(user.role);
 }
@@ -241,7 +282,7 @@ function canManageUsers(user) {
 }
 
 function send(res, status, body, headers = {}) {
-  res.writeHead(status, headers);
+  res.writeHead(status, { ...defaultHeaders, ...headers });
   res.end(body);
 }
 
@@ -543,15 +584,17 @@ function serveFile(req, res, attachmentId, user) {
 }
 
 async function apiLogin(req, res) {
+  if (setupRequired()) {
+    return json(res, 409, { error: "أكمل إعداد أول مدير للنظام قبل تسجيل الدخول." });
+  }
   const { email, password } = await readJson(req);
   const user = db.prepare("SELECT * FROM users WHERE lower(email) = lower(?) AND active = 1").get(String(email || "").trim());
   if (!user || !verifyPassword(String(password || ""), user.password_hash)) {
     return json(res, 401, { error: "البريد أو كلمة المرور غير صحيحة." });
   }
-  const sessionId = crypto.randomUUID();
-  sessions.set(sessionId, { userId: user.id, expiresAt: Date.now() + 8 * 60 * 60 * 1000 });
+  const sessionId = createSession(user.id);
   json(res, 200, { user: publicUser(user) }, {
-    "Set-Cookie": `barakat_session=${encodeURIComponent(sessionId)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800`
+    "Set-Cookie": sessionCookie(sessionId, 28800)
   });
 }
 
@@ -559,8 +602,60 @@ function apiLogout(req, res) {
   const sessionId = parseCookies(req.headers.cookie || "").barakat_session;
   if (sessionId) sessions.delete(sessionId);
   json(res, 200, { ok: true }, {
-    "Set-Cookie": "barakat_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0"
+    "Set-Cookie": sessionCookie("", 0)
   });
+}
+
+async function apiSetup(req, res) {
+  if (!setupRequired()) return json(res, 409, { error: "تم إعداد النظام بالفعل." });
+  const body = await readJson(req);
+  const name = String(body.name || "").trim();
+  const email = String(body.email || "").trim().toLowerCase();
+  const department = String(body.department || "إدارة البرنامج").trim();
+  const password = String(body.password || "");
+  const confirmPassword = String(body.confirm_password || "");
+
+  if (!name || !email || !password) {
+    return json(res, 400, { error: "أكمل اسم المدير والبريد وكلمة المرور." });
+  }
+  if (!email.includes("@") || !email.includes(".")) {
+    return json(res, 400, { error: "اكتب بريدًا إلكترونيًا صحيحًا." });
+  }
+  if (password.length < 10) {
+    return json(res, 400, { error: "كلمة المرور يجب ألا تقل عن 10 أحرف." });
+  }
+  if (password !== confirmPassword) {
+    return json(res, 400, { error: "تأكيد كلمة المرور غير مطابق." });
+  }
+
+  try {
+    const admin = createAdminUser({ name, email, password, department });
+    const sessionId = createSession(admin.id);
+    json(res, 201, { ok: true, user: publicUser(admin) }, {
+      "Set-Cookie": sessionCookie(sessionId, 28800)
+    });
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) return json(res, 409, { error: "هذا البريد مستخدم بالفعل." });
+    throw error;
+  }
+}
+
+function apiHealth(req, res) {
+  try {
+    db.prepare("SELECT 1 AS ok").get();
+    json(res, 200, {
+      ok: true,
+      service: "barakat-helpdesk",
+      database: true,
+      uploads: fs.existsSync(UPLOAD_DIR)
+    });
+  } catch (error) {
+    json(res, 503, {
+      ok: false,
+      service: "barakat-helpdesk",
+      database: false
+    });
+  }
 }
 
 function apiState(req, res, user) {
@@ -757,6 +852,8 @@ function markNotificationsRead(user) {
 }
 
 async function handleApi(req, res, pathname, user) {
+  if (pathname === "/api/health" && req.method === "GET") return apiHealth(req, res);
+  if (pathname === "/api/setup" && req.method === "POST") return apiSetup(req, res);
   if (pathname === "/api/login" && req.method === "POST") return apiLogin(req, res);
   if (!user) return json(res, 401, { error: "سجل الدخول أولًا." });
   if (pathname === "/api/logout" && req.method === "POST") return apiLogout(req, res);
@@ -789,8 +886,25 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const pathname = decodeURIComponent(url.pathname);
   const user = getSessionUser(req);
+  const needsSetup = setupRequired();
 
   try {
+    if (pathname.startsWith("/api/")) return handleApi(req, res, pathname, user);
+
+    if (pathname === "/setup" && req.method === "GET") {
+      if (!needsSetup) return redirect(res, "/");
+      return send(res, 200, fs.readFileSync(path.join(PUBLIC_DIR, "setup.html")), {
+        "Content-Type": "text/html; charset=utf-8"
+      });
+    }
+
+    if (needsSetup) {
+      if (["/brand-logo.png", "/styles.css", "/setup.js"].includes(pathname)) {
+        if (handleStatic(req, res, pathname)) return;
+      }
+      return redirect(res, "/setup");
+    }
+
     if (pathname === "/login" && req.method === "GET") {
       if (user) return redirect(res, "/");
       return send(res, 200, fs.readFileSync(path.join(PUBLIC_DIR, "login.html")), {
@@ -798,14 +912,12 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    if (pathname.startsWith("/api/")) return handleApi(req, res, pathname, user);
-
     if (pathname.startsWith("/files/") && req.method === "GET") {
       if (!user) return redirect(res, "/login");
       return serveFile(req, res, pathname.replace("/files/", ""), user);
     }
 
-    if (["/brand-logo.png", "/styles.css", "/app.js", "/login.js"].includes(pathname)) {
+    if (["/brand-logo.png", "/styles.css", "/app.js", "/login.js", "/setup.js"].includes(pathname)) {
       if (handleStatic(req, res, pathname)) return;
     }
 
