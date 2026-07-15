@@ -16,6 +16,8 @@ const toast = document.querySelector("#toast");
 const notificationsRoot = document.querySelector("#notifications");
 const seenNotificationIds = new Set();
 let notificationsInitialized = false;
+const toastQueue = [];
+let toastTimer = null;
 
 const titles = {
   dashboard: "لوحة التحكم",
@@ -70,14 +72,29 @@ function isStaff() {
   return ["admin", "manager", "agent"].includes(state.user?.role);
 }
 
+function isAdmin() {
+  return state.user?.role === "admin";
+}
+
 function canManageUsers() {
-  return ["admin", "manager"].includes(state.user?.role);
+  return isAdmin();
 }
 
 function showToast(message) {
-  toast.textContent = message;
+  toastQueue.push(message);
+  showNextToast();
+}
+
+function showNextToast() {
+  if (toastTimer || !toastQueue.length) return;
+
+  toast.textContent = toastQueue.shift();
   toast.classList.add("visible");
-  window.setTimeout(() => toast.classList.remove("visible"), 2600);
+  toastTimer = window.setTimeout(() => {
+    toast.classList.remove("visible");
+    toastTimer = null;
+    window.setTimeout(showNextToast, 200);
+  }, 4500);
 }
 
 async function api(path, options = {}) {
@@ -116,6 +133,7 @@ async function pollNotifications() {
 
     if (notificationsInitialized) {
       fresh.forEach((item) => showToast(`${item.title}: ${item.body}`));
+      if (fresh.length) await loadState();
     }
   } catch (error) {
     if (error.message.includes("سجل الدخول")) window.location.href = "/login";
@@ -130,7 +148,7 @@ function renderShell() {
     const view = button.dataset.view;
     button.classList.toggle("active", view === state.view);
     if (view === "users") button.classList.toggle("hidden", !canManageUsers());
-    if (view === "reports") button.classList.toggle("hidden", !isStaff());
+    if (view === "reports") button.classList.toggle("hidden", !isAdmin());
   });
   renderNotifications();
 }
@@ -153,7 +171,7 @@ function renderNotifications() {
 
 function setView(view) {
   if (view === "users" && !canManageUsers()) return;
-  if (view === "reports" && !isStaff()) return;
+  if (view === "reports" && !isAdmin()) return;
   state.view = view;
   pageTitle.textContent = titles[view];
   renderShell();
@@ -549,6 +567,10 @@ function renderUsers() {
                 <span class="pill">${user.active ? "نشط" : "معطل"}</span>
                 ${user.id !== state.user.id ? `<button class="${user.active ? "danger-button" : "ghost-button"}" data-action="toggle-user" data-user-id="${user.id}" data-active="${user.active ? "0" : "1"}">${user.active ? "تعطيل" : "تفعيل"}</button>` : ""}
               </div>
+              <form class="password-reset-form" data-user-id="${user.id}">
+                <input name="password" type="password" minlength="10" placeholder="كلمة مرور جديدة" required />
+                <button class="ghost-button" type="submit">تغيير كلمة المرور</button>
+              </form>
             </div>
           `).join("")}
         </div>
@@ -577,8 +599,8 @@ function renderUsers() {
 }
 
 function renderReports() {
-  if (!isStaff()) {
-    root.innerHTML = `<section class="panel detail-empty">التقارير متاحة للفريق فقط.</section>`;
+  if (!isAdmin()) {
+    root.innerHTML = `<section class="panel detail-empty">التقارير متاحة لمدير البرنامج فقط.</section>`;
     return;
   }
   const maxCount = Math.max(...state.stats.byAssignee.map((item) => item.open + item.completed + item.overdue), 1);
@@ -756,6 +778,16 @@ document.addEventListener("submit", async (event) => {
       event.target.reset();
       await loadState();
     }
+    if (event.target.classList.contains("password-reset-form")) {
+      const payload = Object.fromEntries(new FormData(event.target).entries());
+      await api(`/api/users/${event.target.dataset.userId}/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      showToast("تم تغيير كلمة المرور.");
+      event.target.reset();
+    }
   } catch (error) {
     showToast(error.message);
   }
@@ -772,4 +804,4 @@ loadState().catch(() => {
   window.location.href = "/login";
 });
 
-window.setInterval(pollNotifications, 5000);
+window.setInterval(pollNotifications, 2000);

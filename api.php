@@ -111,10 +111,17 @@ function api_state(array $user): void
         $tickets
     );
 
-    if (is_staff($user)) {
+    if (can_manage_users($user)) {
         $users = app_pdo()->query('
             SELECT id, name, email, role, department, active, created_at
             FROM users
+            ORDER BY role, name
+        ')->fetchAll();
+    } elseif (is_staff($user)) {
+        $users = app_pdo()->query('
+            SELECT id, name, email, role, department, active, created_at
+            FROM users
+            WHERE active = 1 AND role IN ("admin", "manager", "agent")
             ORDER BY role, name
         ')->fetchAll();
     } else {
@@ -203,6 +210,7 @@ function api_create_ticket(array $user): void
 
         add_event($id, $user['id'], 'created', null, 'new', 'تم إنشاء الطلب.');
         notify_roles(['admin', 'manager', 'agent'], $id, 'طلب جديد', "تم إنشاء الطلب $number: $title");
+        notify_user($user['id'], $id, 'تم استلام طلبك', "وصل طلبك $number إلى الفريق وسيتم مراجعته.");
         $pdo->commit();
     } catch (Throwable $error) {
         $pdo->rollBack();
@@ -246,7 +254,13 @@ function api_assign_ticket(array $user, string $ticketId): void
     add_event($ticketId, $user['id'], 'assigned', $ticket['assignee_id'], $assignee['id'], 'تم إسناد الطلب إلى ' . $assignee['name'] . '.');
     if ($ticket['status'] !== $nextStatus) {
         add_event($ticketId, $user['id'], 'status', $ticket['status'], $nextStatus, 'تغيرت الحالة إلى ' . $statuses[$nextStatus] . '.');
-        notify_user($ticket['requester_id'], $ticketId, 'تحديث على طلبك', 'أصبحت حالة الطلب ' . $ticket['number'] . ': ' . $statuses[$nextStatus] . '.');
+        notify_users(
+            array_merge([$ticket['requester_id']], user_ids_for_roles(['admin', 'manager'])),
+            $ticketId,
+            'تغيير حالة الطلب',
+            'أصبحت حالة الطلب ' . $ticket['number'] . ': ' . $statuses[$nextStatus] . '.',
+            [$user['id']]
+        );
     }
     notify_user($assignee['id'], $ticketId, 'طلب مسند إليك', 'تم إسناد الطلب ' . $ticket['number'] . ' إليك.');
 
@@ -276,7 +290,13 @@ function api_set_status(array $user, string $ticketId): void
     $stmt->execute([$status, $updatedAt, $ticketId]);
 
     add_event($ticketId, $user['id'], 'status', $ticket['status'], $status, 'تغيرت الحالة إلى ' . $statuses[$status] . '.');
-    notify_user($ticket['requester_id'], $ticketId, 'تحديث على طلبك', 'أصبحت حالة الطلب ' . $ticket['number'] . ': ' . $statuses[$status] . '.');
+    notify_users(
+        array_merge([$ticket['requester_id'], $ticket['assignee_id'] ?? null], user_ids_for_roles(['admin', 'manager'])),
+        $ticketId,
+        'تغيير حالة الطلب',
+        'أصبحت حالة الطلب ' . $ticket['number'] . ': ' . $statuses[$status] . '.',
+        [$user['id']]
+    );
 
     json_response(200, ['ok' => true]);
 }
@@ -316,6 +336,13 @@ function api_complete_ticket(array $user, string $ticketId): void
         'تم الانتهاء من طلبك',
         'تم الانتهاء من الطلب ' . $ticket['number'] . '. يمكنك تأكيد الاستلام أو إعادة فتحه.'
     );
+    notify_users(
+        array_merge([$ticket['requester_id'], $ticket['assignee_id'] ?? null], user_ids_for_roles(['admin', 'manager'])),
+        $ticketId,
+        'طلب مكتمل',
+        'تم إكمال الطلب ' . $ticket['number'] . ' وتسجيل الحل.',
+        [$user['id'], $ticket['requester_id']]
+    );
 
     json_response(200, ['ok' => true]);
 }
@@ -338,9 +365,13 @@ function api_confirm_ticket(array $user, string $ticketId): void
     $stmt->execute([$confirmedAt, $confirmedAt, $ticketId]);
     add_event($ticketId, $user['id'], 'confirmed', 'completed', 'confirmed', 'أكد الموظف استلام الحل.');
 
-    if (!empty($ticket['assignee_id'])) {
-        notify_user($ticket['assignee_id'], $ticketId, 'تم تأكيد الاستلام', 'أكد الموظف استلام الطلب ' . $ticket['number'] . '.');
-    }
+    notify_users(
+        array_merge([$ticket['assignee_id'] ?? null], user_ids_for_roles(['admin', 'manager'])),
+        $ticketId,
+        'تم تأكيد الاستلام',
+        'أكد الموظف استلام الطلب ' . $ticket['number'] . '.',
+        [$user['id']]
+    );
 
     json_response(200, ['ok' => true]);
 }
@@ -378,7 +409,7 @@ function api_reopen_ticket(array $user, string $ticketId): void
 function api_create_user(array $user): void
 {
     if (!can_manage_users($user)) {
-        json_response(403, ['error' => 'إضافة الأشخاص متاحة لمدير البرنامج أو المشرف فقط.']);
+        json_response(403, ['error' => 'إضافة الأشخاص متاحة لمدير البرنامج فقط.']);
     }
 
     $body = read_json_body();
@@ -417,7 +448,7 @@ function api_create_user(array $user): void
 function api_toggle_user(array $user, string $userId): void
 {
     if (!can_manage_users($user)) {
-        json_response(403, ['error' => 'تعديل الأشخاص متاح لمدير البرنامج أو المشرف فقط.']);
+        json_response(403, ['error' => 'تعديل الأشخاص متاح لمدير البرنامج فقط.']);
     }
     if ($userId === $user['id']) {
         json_response(400, ['error' => 'لا يمكن تعطيل حسابك الحالي.']);
@@ -427,6 +458,29 @@ function api_toggle_user(array $user, string $userId): void
     $active = !empty($body['active']) ? 1 : 0;
     $stmt = app_pdo()->prepare('UPDATE users SET active = ? WHERE id = ?');
     $stmt->execute([$active, $userId]);
+
+    if ($stmt->rowCount() === 0) {
+        json_response(404, ['error' => 'المستخدم غير موجود.']);
+    }
+
+    json_response(200, ['ok' => true]);
+}
+
+function api_update_user_password(array $user, string $userId): void
+{
+    if (!can_manage_users($user)) {
+        json_response(403, ['error' => 'تغيير كلمات المرور متاح لمدير البرنامج فقط.']);
+    }
+
+    $body = read_json_body();
+    $password = (string) ($body['password'] ?? '');
+
+    if (strlen($password) < 10) {
+        json_response(400, ['error' => 'كلمة المرور يجب ألا تقل عن 10 أحرف.']);
+    }
+
+    $stmt = app_pdo()->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+    $stmt->execute([password_hash($password, PASSWORD_DEFAULT), $userId]);
 
     if ($stmt->rowCount() === 0) {
         json_response(404, ['error' => 'المستخدم غير موجود.']);
@@ -494,6 +548,10 @@ try {
         api_toggle_user($user, $match[1]);
     }
 
+    if ($method === 'POST' && preg_match('#^/api/users/([^/]+)/password$#', $path, $match)) {
+        api_update_user_password($user, $match[1]);
+    }
+
     json_response(404, ['error' => 'المسار غير موجود.']);
 } catch (AppHttpException $error) {
     json_response($error->status, ['error' => $error->getMessage()]);
@@ -503,4 +561,3 @@ try {
     error_log($error);
     json_response(500, ['error' => 'حدث خطأ غير متوقع.']);
 }
-

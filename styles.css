@@ -1070,6 +1070,18 @@ textarea:focus {
   color: var(--brand-deep);
 }
 
+.password-reset-form {
+  width: min(360px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.password-reset-form input {
+  min-width: 0;
+}
+
 .report-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1268,6 +1280,11 @@ textarea:focus {
   .weekly-report-actions {
     width: 100%;
     justify-content: stretch;
+  }
+
+  .password-reset-form {
+    width: 100%;
+    grid-template-columns: 1fr;
   }
 
   .weekly-report-actions button {

@@ -239,7 +239,7 @@ function is_staff(array $user): bool
 
 function can_manage_users(array $user): bool
 {
-    return in_array($user['role'] ?? '', ['admin', 'manager'], true);
+    return ($user['role'] ?? '') === 'admin';
 }
 
 function public_user(array $user): array
@@ -492,17 +492,34 @@ function notify_user(string $userId, ?string $ticketId, string $title, string $b
     $stmt->execute([uuid(), $userId, $ticketId, $title, $body, now_iso()]);
 }
 
-function notify_roles(array $roles, string $ticketId, string $title, string $body): void
+function notify_users(array $userIds, ?string $ticketId, string $title, string $body, array $excludeUserIds = []): void
+{
+    $exclude = array_flip(array_filter($excludeUserIds));
+    $ids = array_values(array_unique(array_filter($userIds)));
+
+    foreach ($ids as $id) {
+        if (isset($exclude[$id])) {
+            continue;
+        }
+        notify_user((string) $id, $ticketId, $title, $body);
+    }
+}
+
+function user_ids_for_roles(array $roles): array
 {
     if (!$roles) {
-        return;
+        return [];
     }
+
     $placeholders = implode(',', array_fill(0, count($roles), '?'));
     $stmt = app_pdo()->prepare("SELECT id FROM users WHERE active = 1 AND role IN ($placeholders)");
     $stmt->execute($roles);
-    foreach ($stmt->fetchAll() as $user) {
-        notify_user($user['id'], $ticketId, $title, $body);
-    }
+    return array_column($stmt->fetchAll(), 'id');
+}
+
+function notify_roles(array $roles, string $ticketId, string $title, string $body): void
+{
+    notify_users(user_ids_for_roles($roles), $ticketId, $title, $body);
 }
 
 function clean_file_name(string $name): string
