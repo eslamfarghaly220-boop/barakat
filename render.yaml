@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: barakat-helpdesk
+    env: docker
+    plan: starter
+    autoDeploy: true
+    disk:
+      name: barakat-helpdesk-storage
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: STORAGE_DIR
+        value: /var/data
+      - key: INITIAL_ADMIN_NAME
+        value: مدير البرنامج
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
+      - key: INITIAL_ADMIN_DEPARTMENT
+        value: إدارة البرنامج
