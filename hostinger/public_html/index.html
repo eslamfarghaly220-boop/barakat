@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Barakat Help Desk</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-logo"><img src="/brand-logo.png" alt="شعار الشركة" /></div>
+          <div>
+            <strong>Barakat Help Desk</strong>
+            <span>خدمة الطلبات الداخلية</span>
+          </div>
+        </div>
+        <nav class="nav">
+          <button data-view="dashboard" class="active">لوحة التحكم</button>
+          <button data-view="tickets">الطلبات</button>
+          <button data-view="newTicket">طلب جديد</button>
+          <button data-view="reports">التقارير</button>
+          <button data-view="users">الأشخاص</button>
+        </nav>
+        <div class="account-card">
+          <span id="userRole"></span>
+          <strong id="userName"></strong>
+          <small id="userEmail"></small>
+          <button id="logoutButton" class="ghost-button">تسجيل الخروج</button>
+        </div>
+      </aside>
+
+      <main class="main-panel">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">لوحة الخدمة الداخلية</p>
+            <h1 id="pageTitle">لوحة التحكم</h1>
+          </div>
+          <div class="top-actions">
+            <button class="outline-button" data-view-jump="newTicket">طلب جديد</button>
+            <button class="icon-button" id="refreshButton" aria-label="تحديث">↻</button>
+          </div>
+        </header>
+
+        <section class="notifications" id="notifications"></section>
+        <section id="viewRoot"></section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>
