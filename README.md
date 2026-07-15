@@ -2,6 +2,8 @@
 
 نظام طلبات داخلي لقسم تقنية المعلومات والتصميم، أقرب إلى Help Desk وخدمة طلبات داخلية وليس تطبيق إدارة مهام عادي.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/eslamfarghaly220-boop/barakat)
+
 ## المزايا
 
 - تسجيل دخول وصلاحيات: مدير البرنامج، مشرف فريق، عضو فريق، موظف.
