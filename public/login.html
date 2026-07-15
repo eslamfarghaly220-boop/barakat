@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>تسجيل الدخول | نظام الطلبات الداخلية</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="login-body">
+    <main class="login-shell">
+      <section class="login-visual" aria-label="نبذة عن نظام الطلبات الداخلية">
+        <div class="login-logo-panel" data-tilt>
+          <img src="/brand-logo.png" alt="شعار الشركة" />
+        </div>
+
+        <div class="login-copy">
+          <p class="login-kicker">بوابة الخدمة الداخلية</p>
+          <h1>بوابة موحدة لطلبات الموظفين</h1>
+          <p>
+            نظام دعم داخلي لاستقبال ومتابعة طلبات تقنية المعلومات والتصميم
+            والصلاحيات والأجهزة والبريد وتعديلات الموقع من مكان واحد.
+          </p>
+        </div>
+
+        <div class="service-metrics">
+          <div>
+            <strong>01</strong>
+            <span>إنشاء الطلب</span>
+          </div>
+          <div>
+            <strong>02</strong>
+            <span>إسناد المسؤول</span>
+          </div>
+          <div>
+            <strong>03</strong>
+            <span>تنفيذ وإغلاق</span>
+          </div>
+        </div>
+
+        <div class="login-flow">
+          <span>طلب جديد</span>
+          <span>قيد المراجعة</span>
+          <span>جاري التنفيذ</span>
+          <span>مكتمل</span>
+        </div>
+      </section>
+
+      <section class="login-panel" aria-label="تسجيل الدخول">
+        <form class="login-card" id="loginForm" data-tilt>
+          <div class="login-form-header">
+            <div class="login-mini-logo">
+              <img src="/brand-logo.png" alt="شعار الشركة" />
+            </div>
+            <div>
+              <p class="eyebrow">دخول آمن</p>
+              <h2>تسجيل الدخول</h2>
+              <span>ادخل بحسابك لمتابعة الطلبات أو إدارة فريق الدعم.</span>
+            </div>
+          </div>
+
+          <label>
+            البريد الإلكتروني
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+
+          <label>
+            كلمة المرور
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+
+          <button class="primary-button login-submit" type="submit">دخول النظام</button>
+          <p class="form-message" id="loginMessage"></p>
+
+          <div class="secure-note">
+            <strong>جلسة آمنة</strong>
+            <span>يتم فصل الصلاحيات حسب الدور: موظف، عضو فريق، مشرف، ومدير البرنامج.</span>
+          </div>
+        </form>
+      </section>
+    </main>
+    <script src="/login.js"></script>
+  </body>
+</html>
