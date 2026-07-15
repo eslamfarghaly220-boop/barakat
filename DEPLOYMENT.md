@@ -1,5 +1,15 @@
 # Production Deployment
 
+## Normal Hostinger hosting
+
+If you bought normal Hostinger Hosting, not a VPS/server, use the PHP + MySQL package:
+
+```text
+hostinger/public_html
+```
+
+Upload the contents of this folder to Hostinger `public_html`, then edit `config.php` with the MySQL database details from hPanel. Use `hostinger/README-AR.md` for the Arabic step-by-step guide.
+
 هذه النسخة مجهزة للتشغيل على سيرفر VPS مثل Hostinger، وأيضًا على أي استضافة تدعم Docker.
 
 للنشر على Hostinger VPS استخدم التعليمات الموجودة هنا:

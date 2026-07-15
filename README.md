@@ -1,5 +1,19 @@
 # Barakat Help Desk
 
+## Hostinger shared hosting
+
+For normal Hostinger Hosting (not VPS), use the PHP + MySQL package in:
+
+```text
+hostinger/public_html
+```
+
+Upload the contents of that folder to `public_html`, then edit `config.php` with your Hostinger MySQL database details. The Arabic step-by-step guide is here:
+
+```text
+hostinger/README-AR.md
+```
+
 نظام طلبات داخلي لقسم تقنية المعلومات والتصميم، أقرب إلى Help Desk وخدمة طلبات داخلية وليس تطبيق إدارة مهام عادي.
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/eslamfarghaly220-boop/barakat)
