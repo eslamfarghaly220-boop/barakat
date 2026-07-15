@@ -2,6 +2,7 @@
 .env
 node_modules
 data
+docs
 storage
 outputs
 work

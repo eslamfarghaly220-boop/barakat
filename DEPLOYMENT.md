@@ -1,6 +1,12 @@
 # Production Deployment
 
-هذه النسخة مجهزة للتشغيل على استضافة تدعم Docker مثل Render.
+هذه النسخة مجهزة للتشغيل على سيرفر VPS مثل Hostinger، وأيضًا على أي استضافة تدعم Docker.
+
+للنشر على Hostinger VPS استخدم التعليمات الموجودة هنا:
+
+```text
+deploy/hostinger/README.md
+```
 
 ## المطلوب قبل ربط الدومين
 

@@ -64,6 +64,8 @@ INITIAL_ADMIN_DEPARTMENT
 
 المشروع يحتوي على:
 
+- `deploy/hostinger/README.md` لتشغيل النظام كاملًا على Hostinger VPS.
+- `deploy/hostinger/docker-compose.yml` لتشغيل التطبيق بقاعدة بيانات ومرفقات ثابتة.
 - `Dockerfile` لتشغيل التطبيق على أي استضافة تدعم Docker.
 - `render.yaml` كنموذج نشر على Render مع مساحة تخزين ثابتة.
 - `.github/workflows/ci.yml` لفحص الكود عند الرفع على GitHub.
@@ -72,4 +74,10 @@ INITIAL_ADMIN_DEPARTMENT
 
 مهم: GitHub يحفظ الكود فقط. تشغيل النظام بقاعدة بيانات ومرفقات يحتاج استضافة مثل Render أو Railway أو VPS.
 
-بعد النشر، افتح رابط الاستضافة لإنشاء حساب مدير البرنامج. بعدها تكون الخطوة المتبقية هي ربط الدومين من إعدادات الاستضافة.
+على Hostinger VPS، بعد تشغيل Docker Compose افتح الرابط المؤقت:
+
+```text
+http://SERVER_IP:3000
+```
+
+بعد النشر، افتح رابط السيرفر لإنشاء حساب مدير البرنامج. بعدها تكون الخطوة المتبقية هي ربط الدومين من إعدادات DNS و Nginx.
